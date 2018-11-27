@@ -7,43 +7,43 @@ import (
 	"github.com/cloudevents/sdk-go/v01"
 )
 
-// EventClient holds info about publishing event
-type EventClient struct {
-	channel   string
-	namespace string
+// EventInfo holds info about the event that occurred
+type EventInfo struct {
+	EventData   []byte
+	EventID     string
+	EventTime   time.Time
+	EventType   string
+	EventSource string
 }
 
-// NewEventClient sets info for pushing events later
-func NewEventClient(channel string, namespace string) *EventClient {
-	ec := EventClient{
-		channel:   channel,
-		namespace: namespace,
-	}
-	return &ec
+// TMEventInterface is here to allow each type of message watcher
+// to implement however it'll receive message data
+type TMEventInterface interface {
+	ReceiveMsg()
 }
 
 // PushEvent pushes an event to a kubernetes service
-func PushEvent(msgData []byte, msgID string, msgTime time.Time, ec *EventClient) error {
+func PushEvent(ev *EventInfo, desiredURL string) error {
 
 	//Setup event info
 	event := &v01.Event{
 		ContentType: "application/json",
-		Data:        msgData,
-		EventID:     msgID,
-		EventTime:   &msgTime,
-		EventType:   "cloudevent.greet.you",
-		Source:      "from-galaxy-far-far-away",
+		Data:        ev.EventData,
+		EventID:     ev.EventID,
+		EventTime:   &ev.EventTime,
+		EventType:   ev.EventType,
+		Source:      ev.EventSource,
 	}
 
 	//Marshal up event JSON and prepare request
 	marshaller := v01.NewDefaultHTTPMarshaller()
-	req, _ := http.NewRequest("POST", "http://"+ec.channel+"-channel."+ec.namespace+".svc.cluster.local", nil)
+	req, _ := http.NewRequest("POST", desiredURL, nil)
 	err := marshaller.ToRequest(req, event)
 	if err != nil {
 		return err
 	}
 
-	//Issue POST request, but return before acking the message if there's an error
+	//Issue POST request
 	_, err = (*http.Client).Do(&http.Client{}, req)
 	if err != nil {
 		return err
